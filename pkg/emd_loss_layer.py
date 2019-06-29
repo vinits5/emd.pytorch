@@ -37,9 +37,4 @@ class EMDLoss(nn.Module):
 	def forward(self, xyz1, xyz2):
 
 		assert xyz1.shape[-1] == xyz2.shape[-1], 'Both point sets must have the same dimensionality'
-		if xyz1.dtype == torch.float64 and xyz1.shape[-1] > 11:
-			error('Tensors of type double can have a maximum of 11 dimensions')
-		if xyz1.dtype == torch.float32 and xyz1.shape[-1] > 23:
-			error('Tensors of type float can have a maximum of 23 dimensions')
-
 		return EMDFunction.apply(xyz1, xyz2)

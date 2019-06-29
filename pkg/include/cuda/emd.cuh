@@ -1,6 +1,12 @@
-__global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,const float * __restrict__ xyz2,float * __restrict__ match,float * temp){
-	float * remainL=temp+blockIdx.x*(n+m)*2, * remainR=temp+blockIdx.x*(n+m)*2+n,*ratioL=temp+blockIdx.x*(n+m)*2+n+m,*ratioR=temp+blockIdx.x*(n+m)*2+n+m+n;
-	float multiL,multiR;
+#ifndef EMD_CUH_
+#define EMD_CUH_
+
+#include "cuda_helper.h"
+
+template<typename T>
+__global__ void approxmatch(const int b, const int n, const int m, const T * __restrict__ xyz1, const T * __restrict__ xyz2, T * __restrict__ match, T * temp){
+	T * remainL=temp+blockIdx.x*(n+m)*2, * remainR=temp+blockIdx.x*(n+m)*2+n,*ratioL=temp+blockIdx.x*(n+m)*2+n+m,*ratioR=temp+blockIdx.x*(n+m)*2+n+m+n;
+	T multiL,multiR;
 	if (n>=m){
 		multiL=1;
 		multiR=n/m;
@@ -9,7 +15,7 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 		multiR=1;
 	}
 	const int Block=1024;
-	__shared__ float buf[Block*4];
+	__shared__ T buf[Block*4];
 	for (int i=blockIdx.x;i<b;i+=gridDim.x){
 		for (int j=threadIdx.x;j<n*m;j+=blockDim.x)
 			match[i*n*m+j]=0;
@@ -25,19 +31,19 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 			}
 			for (int k0=0;k0<n;k0+=blockDim.x){
 				int k=k0+threadIdx.x;
-				float x1=0,y1=0,z1=0;
+				T x1=0,y1=0,z1=0;
 				if (k<n){
 					x1=xyz1[i*n*3+k*3+0];
 					y1=xyz1[i*n*3+k*3+1];
 					z1=xyz1[i*n*3+k*3+2];
 				}
-				float suml=1e-9f;
+				T suml=T(1e-9f);
 				for (int l0=0;l0<m;l0+=Block){
 					int lend=min(m,l0+Block)-l0;
 					for (int l=threadIdx.x;l<lend;l+=blockDim.x){
-						float x2=xyz2[i*m*3+l0*3+l*3+0];
-						float y2=xyz2[i*m*3+l0*3+l*3+1];
-						float z2=xyz2[i*m*3+l0*3+l*3+2];
+						T x2=xyz2[i*m*3+l0*3+l*3+0];
+						T y2=xyz2[i*m*3+l0*3+l*3+1];
+						T z2=xyz2[i*m*3+l0*3+l*3+2];
 						buf[l*4+0]=x2;
 						buf[l*4+1]=y2;
 						buf[l*4+2]=z2;
@@ -45,11 +51,11 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 					}
 					__syncthreads();
 					for (int l=0;l<lend;l++){
-						float x2=buf[l*4+0];
-						float y2=buf[l*4+1];
-						float z2=buf[l*4+2];
-						float d=level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1));
-						float w=__expf(d)*buf[l*4+3];
+						T x2=buf[l*4+0];
+						T y2=buf[l*4+1];
+						T z2=buf[l*4+2];
+						T d=level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1));
+						T w=__expf(d)*buf[l*4+3];
 						suml+=w;
 					}
 					__syncthreads();
@@ -58,15 +64,15 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 					ratioL[k]=remainL[k]/suml;
 			}
 			/*for (int k=threadIdx.x;k<n;k+=gridDim.x){
-				float x1=xyz1[i*n*3+k*3+0];
-				float y1=xyz1[i*n*3+k*3+1];
-				float z1=xyz1[i*n*3+k*3+2];
-				float suml=1e-9f;
+				T x1=xyz1[i*n*3+k*3+0];
+				T y1=xyz1[i*n*3+k*3+1];
+				T z1=xyz1[i*n*3+k*3+2];
+				T suml=1e-9f;
 				for (int l=0;l<m;l++){
-					float x2=xyz2[i*m*3+l*3+0];
-					float y2=xyz2[i*m*3+l*3+1];
-					float z2=xyz2[i*m*3+l*3+2];
-					float w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*remainR[l];
+					T x2=xyz2[i*m*3+l*3+0];
+					T y2=xyz2[i*m*3+l*3+1];
+					T z2=xyz2[i*m*3+l*3+2];
+					T w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*remainR[l];
 					suml+=w;
 				}
 				ratioL[k]=remainL[k]/suml;
@@ -74,13 +80,13 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 			__syncthreads();
 			for (int l0=0;l0<m;l0+=blockDim.x){
 				int l=l0+threadIdx.x;
-				float x2=0,y2=0,z2=0;
+				T x2=0,y2=0,z2=0;
 				if (l<m){
 					x2=xyz2[i*m*3+l*3+0];
 					y2=xyz2[i*m*3+l*3+1];
 					z2=xyz2[i*m*3+l*3+2];
 				}
-				float sumr=0;
+				T sumr=0;
 				for (int k0=0;k0<n;k0+=Block){
 					int kend=min(n,k0+Block)-k0;
 					for (int k=threadIdx.x;k<kend;k+=blockDim.x){
@@ -91,48 +97,48 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 					}
 					__syncthreads();
 					for (int k=0;k<kend;k++){
-						float x1=buf[k*4+0];
-						float y1=buf[k*4+1];
-						float z1=buf[k*4+2];
-						float w=__expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*buf[k*4+3];
+						T x1=buf[k*4+0];
+						T y1=buf[k*4+1];
+						T z1=buf[k*4+2];
+						T w=__expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*buf[k*4+3];
 						sumr+=w;
 					}
 					__syncthreads();
 				}
 				if (l<m){
 					sumr*=remainR[l];
-					float consumption=fminf(remainR[l]/(sumr+1e-9f),1.0f);
+					T consumption=fminf(remainR[l]/(sumr+1e-9f),1.0f);
 					ratioR[l]=consumption*remainR[l];
 					remainR[l]=fmaxf(0.0f,remainR[l]-sumr);
 				}
 			}
 			/*for (int l=threadIdx.x;l<m;l+=blockDim.x){
-				float x2=xyz2[i*m*3+l*3+0];
-				float y2=xyz2[i*m*3+l*3+1];
-				float z2=xyz2[i*m*3+l*3+2];
-				float sumr=0;
+				T x2=xyz2[i*m*3+l*3+0];
+				T y2=xyz2[i*m*3+l*3+1];
+				T z2=xyz2[i*m*3+l*3+2];
+				T sumr=0;
 				for (int k=0;k<n;k++){
-					float x1=xyz1[i*n*3+k*3+0];
-					float y1=xyz1[i*n*3+k*3+1];
-					float z1=xyz1[i*n*3+k*3+2];
-					float w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*ratioL[k];
+					T x1=xyz1[i*n*3+k*3+0];
+					T y1=xyz1[i*n*3+k*3+1];
+					T z1=xyz1[i*n*3+k*3+2];
+					T w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*ratioL[k];
 					sumr+=w;
 				}
 				sumr*=remainR[l];
-				float consumption=fminf(remainR[l]/(sumr+1e-9f),1.0f);
+				T consumption=fminf(remainR[l]/(sumr+1e-9f),1.0f);
 				ratioR[l]=consumption*remainR[l];
 				remainR[l]=fmaxf(0.0f,remainR[l]-sumr);
 			}*/
 			__syncthreads();
 			for (int k0=0;k0<n;k0+=blockDim.x){
 				int k=k0+threadIdx.x;
-				float x1=0,y1=0,z1=0;
+				T x1=0,y1=0,z1=0;
 				if (k<n){
 					x1=xyz1[i*n*3+k*3+0];
 					y1=xyz1[i*n*3+k*3+1];
 					z1=xyz1[i*n*3+k*3+2];
 				}
-				float suml=0;
+				T suml=0;
 				for (int l0=0;l0<m;l0+=Block){
 					int lend=min(m,l0+Block)-l0;
 					for (int l=threadIdx.x;l<lend;l+=blockDim.x){
@@ -142,13 +148,13 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 						buf[l*4+3]=ratioR[l0+l];
 					}
 					__syncthreads();
-					float rl=ratioL[k];
+					T rl=ratioL[k];
 					if (k<n){
 						for (int l=0;l<lend;l++){
-							float x2=buf[l*4+0];
-							float y2=buf[l*4+1];
-							float z2=buf[l*4+2];
-							float w=__expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*rl*buf[l*4+3];
+							T x2=buf[l*4+0];
+							T y2=buf[l*4+1];
+							T z2=buf[l*4+2];
+							T w=__expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*rl*buf[l*4+3];
 							match[i*n*m+(l0+l)*n+k]+=w;
 							suml+=w;
 						}
@@ -159,15 +165,15 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 					remainL[k]=fmaxf(0.0f,remainL[k]-suml);
 			}
 			/*for (int k=threadIdx.x;k<n;k+=blockDim.x){
-				float x1=xyz1[i*n*3+k*3+0];
-				float y1=xyz1[i*n*3+k*3+1];
-				float z1=xyz1[i*n*3+k*3+2];
-				float suml=0;
+				T x1=xyz1[i*n*3+k*3+0];
+				T y1=xyz1[i*n*3+k*3+1];
+				T z1=xyz1[i*n*3+k*3+2];
+				T suml=0;
 				for (int l=0;l<m;l++){
-					float x2=xyz2[i*m*3+l*3+0];
-					float y2=xyz2[i*m*3+l*3+1];
-					float z2=xyz2[i*m*3+l*3+2];
-					float w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*ratioL[k]*ratioR[l];
+					T x2=xyz2[i*m*3+l*3+0];
+					T y2=xyz2[i*m*3+l*3+1];
+					T z2=xyz2[i*m*3+l*3+2];
+					T w=expf(level*((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1)))*ratioL[k]*ratioR[l];
 					match[i*n*m+l*n+k]+=w;
 					suml+=w;
 				}
@@ -177,19 +183,33 @@ __global__ void approxmatch(int b,int n,int m,const float * __restrict__ xyz1,co
 		}
 	}
 }
-void approxmatchLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,float * match,float * temp){
-	approxmatch<<<32,512>>>(b,n,m,xyz1,xyz2,match,temp);
+//void approxmatchLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,float * match,float * temp){
+	//approxmatch<<<32,512>>>(b,n,m,xyz1,xyz2,match,temp);
+//}
+
+void approx_match(const int b, const int n, const int m, const int d, const at::Tensor xyz1, const at::Tensor xyz2, at::Tensor match, at::Tensor temp){
+	AT_DISPATCH_FLOATING_TYPES(match.type(), "approxmatch", ([&] {
+		approxmatch
+			<<<32, 512>>>(
+			b, n, m, d, 
+			xyz1.data<scalar_t>(),
+			xyz2.data<scalar_t>(),
+			match.data<scalar_t>(),
+			temp.data<scalar_t>());
+	}));
+	cudaDeviceSynchronize();
+	CUDA_CHECK(cudaGetLastError())
 }
 
-__global__ void matchcost(int b,int n,int m,const float * __restrict__ xyz1,const float * __restrict__ xyz2,const float * __restrict__ match,float * __restrict__ out){
-	__shared__ float allsum[512];
+__global__ void matchcost(const int b, const int n, const int m, const T * __restrict__ xyz1, const T * __restrict__ xyz2, const T * __restrict__ match, T * __restrict__ out){
+	__shared__ T allsum[512];
 	const int Block=1024;
-	__shared__ float buf[Block*3];
+	__shared__ T buf[Block*3];
 	for (int i=blockIdx.x;i<b;i+=gridDim.x){
-		float subsum=0;
+		T subsum=0;
 		for (int k0=0;k0<n;k0+=blockDim.x){
 			int k=k0+threadIdx.x;
-			float x1=0,y1=0,z1=0;
+			T x1=0,y1=0,z1=0;
 			if (k<n){
 				x1=xyz1[i*n*3+k*3+0];
 				y1=xyz1[i*n*3+k*3+1];
@@ -202,10 +222,10 @@ __global__ void matchcost(int b,int n,int m,const float * __restrict__ xyz1,cons
 				__syncthreads();
 				if (k<n){
 					for (int l=0;l<lend;l++){
-						float x2=buf[l*3+0];
-						float y2=buf[l*3+1];
-						float z2=buf[l*3+2];
-						float d=sqrtf((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1));
+						T x2=buf[l*3+0];
+						T y2=buf[l*3+1];
+						T z2=buf[l*3+2];
+						T d=sqrtf((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1));
 						subsum+=d*match[i*n*m+(l0+l)*n+k];
 					}
 				}
@@ -224,6 +244,18 @@ __global__ void matchcost(int b,int n,int m,const float * __restrict__ xyz1,cons
 		__syncthreads();
 	}
 }
-void matchcostLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,const float * match,float * out){
-	matchcost<<<32,512>>>(b,n,m,xyz1,xyz2,match,out);
+//void matchcostLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,const float * match,float * out){
+//	matchcost<<<32,512>>>(b,n,m,xyz1,xyz2,match,out);
+//}
+
+void match_cost(const int b, const int n, const int m, const int d, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor out){
+	AT_DISPATCH_FLOATING_TYPES(xyz1.type(), "matchcost", ([&] {
+		matchcost<<<32, 512>>>(
+			b, n, m, d, 
+			xyz1.data<scalar_t>(),
+			xyz2.data<scalar_t>(),
+			match.data<scalar_t>(),
+			out.data<scalar_t>());
+	}));
+	CUDA_CHECK(cudaGetLastError())
 }
