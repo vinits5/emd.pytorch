@@ -38,4 +38,4 @@ class EMDLoss(nn.Module):
 
 		assert xyz1.shape[-1] == xyz2.shape[-1], 'Both point sets must have the same dimensions!'
 		assert xyz1.shape[1] == xyz2.shape[1], 'Both Point Clouds must have same number of points in it.'
-		return (EMDFunction.apply(xyz1, xyz2))/(xyz1.shape[1])
+		return EMDFunction.apply(xyz1, xyz2)
