@@ -183,15 +183,12 @@ __global__ void approxmatch(const int b, const int n, const int m, const T * __r
 		}
 	}
 }
-//void approxmatchLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,float * match,float * temp){
-	//approxmatch<<<32,512>>>(b,n,m,xyz1,xyz2,match,temp);
-//}
 
-void approx_match(const int b, const int n, const int m, const int d, const at::Tensor xyz1, const at::Tensor xyz2, at::Tensor match, at::Tensor temp){
+void approx_match(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, at::Tensor match, at::Tensor temp){
 	AT_DISPATCH_FLOATING_TYPES(match.type(), "approxmatch", ([&] {
 		approxmatch
 			<<<32, 512>>>(
-			b, n, m, d, 
+			b, n, m, 
 			xyz1.data<scalar_t>(),
 			xyz2.data<scalar_t>(),
 			match.data<scalar_t>(),
@@ -201,6 +198,7 @@ void approx_match(const int b, const int n, const int m, const int d, const at::
 	CUDA_CHECK(cudaGetLastError())
 }
 
+template<typename T>
 __global__ void matchcost(const int b, const int n, const int m, const T * __restrict__ xyz1, const T * __restrict__ xyz2, const T * __restrict__ match, T * __restrict__ out){
 	__shared__ T allsum[512];
 	const int Block=1024;
@@ -244,14 +242,11 @@ __global__ void matchcost(const int b, const int n, const int m, const T * __res
 		__syncthreads();
 	}
 }
-//void matchcostLauncher(int b,int n,int m,const float * xyz1,const float * xyz2,const float * match,float * out){
-//	matchcost<<<32,512>>>(b,n,m,xyz1,xyz2,match,out);
-//}
 
-void match_cost(const int b, const int n, const int m, const int d, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor out){
+void match_cost(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor out){
 	AT_DISPATCH_FLOATING_TYPES(xyz1.type(), "matchcost", ([&] {
 		matchcost<<<32, 512>>>(
-			b, n, m, d, 
+			b, n, m,
 			xyz1.data<scalar_t>(),
 			xyz2.data<scalar_t>(),
 			match.data<scalar_t>(),
@@ -259,3 +254,5 @@ void match_cost(const int b, const int n, const int m, const int d, const at::Te
 	}));
 	CUDA_CHECK(cudaGetLastError())
 }
+
+#endif

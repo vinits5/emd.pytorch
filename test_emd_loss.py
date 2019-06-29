@@ -6,8 +6,8 @@ from emd import EMDLoss
 
 dist =  EMDLoss()
 
-p1 = torch.rand(1,5,3).cuda().double()
-p2 = torch.rand(1,10,3).cuda().double()
+p1 = torch.rand(2,1024,3).cuda().double()
+p2 = torch.rand(2,1024,3).cuda().double()
 p1.requires_grad = True
 p2.requires_grad = True
 

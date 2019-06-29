@@ -23,7 +23,7 @@ std::vector<at::Tensor> emd_forward_cuda(
 		xyz1.options());
 
 	// Find the approximate matching
-	approxmatchLauncher(
+	approx_match(
 		batch_size, num_pts_1, num_pts_2,
 		xyz1,
 		xyz2, 
@@ -32,7 +32,7 @@ std::vector<at::Tensor> emd_forward_cuda(
 	);
 
 	// Compute the matching cost
-	matchcostLauncher(
+	match_cost(
 		batch_size, num_pts_1, num_pts_2, 
 		xyz1,
 		xyz2, 
