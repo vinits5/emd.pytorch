@@ -32,24 +32,24 @@ std::vector<at::Tensor> emd_forward(
 	return emd_forward_cuda(xyz1, xyz2);
 }
 
-std::vector<at::Tensor> emd_backward(
-	at::Tensor xyz1, 
-	at::Tensor xyz2,
-	at::Tensor match)
-{
-	CHECK_INPUT(xyz1);
-	CHECK_INPUT(xyz2);
-	CHECK_INPUT(match);
+// std::vector<at::Tensor> emd_backward(
+// 	at::Tensor xyz1, 
+// 	at::Tensor xyz2,
+// 	at::Tensor match)
+// {
+// 	CHECK_INPUT(xyz1);
+// 	CHECK_INPUT(xyz2);
+// 	CHECK_INPUT(match);
 
-	return emd_backward_cuda(xyz1, xyz2, match);
-}
+// 	return emd_backward_cuda(xyz1, xyz2, match);
+// }
 
 
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("emd_forward", &emd_forward, "Compute Earth Mover's Distance approximation");
-	m.def("emd_backward", &emd_backward, "Compute Earth Mover's Distance approximation");
+	// m.def("emd_backward", &emd_backward, "Compute Earth Mover's Distance approximation");
 }
 
 
