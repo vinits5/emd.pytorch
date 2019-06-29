@@ -22,28 +22,28 @@ std::vector<at::Tensor> emd_forward_cuda(
 	at::Tensor temp = at::zeros({batch_size, 2 * (num_pts_1 + num_pts_2)}, 
 		xyz1.options());
 
-	float xyz1_f = xyz1.data<float>();
-	float xyz2_f = xyz2.data<float>();
-	float match_f = match.data<float>();
-	float temp_f = temp.data<float>();
-	float cost_f = cost.data<float>();
+	float *xyz1_f = xyz1.data<float>();
+	float *xyz2_f = xyz2.data<float>();
+	float *match_f = match.data<float>();
+	float *temp_f = temp.data<float>();
+	float *cost_f = cost.data<float>();
 
 	// Find the approximate matching
 	approxmatchLauncher(
 		batch_size, num_pts_1, num_pts_2,
-		&xyz1_f,
-		&xyz2_f, 
-		&match_f,
-		&temp_f
+		xyz1_f,
+		xyz2_f, 
+		match_f,
+		temp_f
 	);
 
 	// Compute the matching cost
 	matchcostLauncher(
 		batch_size, num_pts_1, num_pts_2, 
-		&xyz1_f,
-		&xyz2_f, 
-		&match_f,
-		&cost_f
+		xyz1_f,
+		xyz2_f, 
+		match_f,
+		cost_f
 	);
 
 	return {cost, match};
