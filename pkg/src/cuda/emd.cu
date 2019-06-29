@@ -13,7 +13,6 @@ std::vector<at::Tensor> emd_forward_cuda(
 	const int batch_size = xyz1.size(0);
 	const int num_pts_1 = xyz1.size(1);
 	const int num_pts_2 = xyz2.size(1);
-	// const int dim = xyz1.size(2);
 
 	// Allocate necessary data structures
 	at::Tensor match = at::zeros({batch_size, num_pts_1, num_pts_2}, 
@@ -23,7 +22,7 @@ std::vector<at::Tensor> emd_forward_cuda(
 		xyz1.options());
 
 	// Find the approximate matching
-	approx_match(
+	approxmatchLauncher(
 		batch_size, num_pts_1, num_pts_2,
 		xyz1,
 		xyz2, 
@@ -32,7 +31,7 @@ std::vector<at::Tensor> emd_forward_cuda(
 	);
 
 	// Compute the matching cost
-	match_cost(
+	matchcostLauncher(
 		batch_size, num_pts_1, num_pts_2, 
 		xyz1,
 		xyz2, 
@@ -41,4 +40,31 @@ std::vector<at::Tensor> emd_forward_cuda(
 	);
 
 	return {cost, match};
+}
+
+std::vector<at::Tensor> emd_backward_cuda(
+	at::Tensor xyz1, 
+	at::Tensor xyz2, 
+	at::Tensor match)
+{
+	// Some useful values
+	const int batch_size = xyz1.size(0);
+	const int num_pts_1 = xyz1.size(1);
+	const int num_pts_2 = xyz2.size(1);
+
+	// Allocate necessary data structures
+	at::Tensor grad_xyz1 = at::zeros_like(xyz1);
+	at::Tensor grad_xyz2 = at::zeros_like(xyz2);
+
+	// Compute the gradient with respect to the two inputs (xyz1 and xyz2)
+	matchcostgradLauncher(
+		batch_size, num_pts_1, num_pts_2,
+		xyz1,
+		xyz2,
+		match,
+		grad_xyz1,
+		grad_xyz2
+	);
+
+	return {grad_xyz1, grad_xyz2};
 }

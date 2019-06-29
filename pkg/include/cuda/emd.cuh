@@ -25,7 +25,7 @@ __global__ void approxmatch(const int b, const int n, const int m, const T * __r
 			remainR[j]=multiR;
 		__syncthreads();
 		for (int j=7;j>=-2;j--){
-			float level=-powf(4.0f,j);
+			T level=-powf(4.0f,j);
 			if (j==-2){
 				level=0;
 			}
@@ -184,7 +184,7 @@ __global__ void approxmatch(const int b, const int n, const int m, const T * __r
 	}
 }
 
-void approx_match(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, at::Tensor match, at::Tensor temp){
+void approxmatchLauncher(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, at::Tensor match, at::Tensor temp){
 	AT_DISPATCH_FLOATING_TYPES(match.type(), "approxmatch", ([&] {
 		approxmatch
 			<<<32, 512>>>(
@@ -243,7 +243,7 @@ __global__ void matchcost(const int b, const int n, const int m, const T * __res
 	}
 }
 
-void match_cost(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor out){
+void matchcostLauncher(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor out){
 	AT_DISPATCH_FLOATING_TYPES(xyz1.type(), "matchcost", ([&] {
 		matchcost<<<32, 512>>>(
 			b, n, m,
@@ -251,6 +251,95 @@ void match_cost(const int b, const int n, const int m, const at::Tensor xyz1, co
 			xyz2.data<scalar_t>(),
 			match.data<scalar_t>(),
 			out.data<scalar_t>());
+	}));
+	CUDA_CHECK(cudaGetLastError())
+}
+
+template <typename T>
+__global__ void matchcostgrad2(const int b, const int n, const int m,const T * __restrict__ xyz1, const T * __restrict__ xyz2, const T * __restrict__ match, T * __restrict__ grad2){
+	__shared__ T sum_grad[256*3];
+	for (int i=blockIdx.x;i<b;i+=gridDim.x){
+		int kbeg=m*blockIdx.y/gridDim.y;
+		int kend=m*(blockIdx.y+1)/gridDim.y;
+		for (int k=kbeg;k<kend;k++){
+			T x2=xyz2[(i*m+k)*3+0];
+			T y2=xyz2[(i*m+k)*3+1];
+			T z2=xyz2[(i*m+k)*3+2];
+			T subsumx=0,subsumy=0,subsumz=0;
+			for (int j=threadIdx.x;j<n;j+=blockDim.x){
+				T x1=x2-xyz1[(i*n+j)*3+0];
+				T y1=y2-xyz1[(i*n+j)*3+1];
+				T z1=z2-xyz1[(i*n+j)*3+2];
+				T d=match[i*n*m+k*n+j]*rsqrtf(fmaxf(x1*x1+y1*y1+z1*z1,1e-20f));
+				subsumx+=x1*d;
+				subsumy+=y1*d;
+				subsumz+=z1*d;
+			}
+			sum_grad[threadIdx.x*3+0]=subsumx;
+			sum_grad[threadIdx.x*3+1]=subsumy;
+			sum_grad[threadIdx.x*3+2]=subsumz;
+			for (int j=1;j<blockDim.x;j<<=1){
+				__syncthreads();
+				int j1=threadIdx.x;
+				int j2=threadIdx.x+j;
+				if ((j1&j)==0 && j2<blockDim.x){
+					sum_grad[j1*3+0]+=sum_grad[j2*3+0];
+					sum_grad[j1*3+1]+=sum_grad[j2*3+1];
+					sum_grad[j1*3+2]+=sum_grad[j2*3+2];
+				}
+			}
+			if (threadIdx.x==0){
+				grad2[(i*m+k)*3+0]=sum_grad[0];
+				grad2[(i*m+k)*3+1]=sum_grad[1];
+				grad2[(i*m+k)*3+2]=sum_grad[2];
+			}
+			__syncthreads();
+		}
+	}
+}
+
+template <typename T>
+__global__ void matchcostgrad1(const int b, const int n, const int m, const T * __restrict__ xyz1, const T * __restrict__ xyz2, const T * __restrict__ match, T * __restrict__ grad1){
+	for (int i=blockIdx.x;i<b;i+=gridDim.x){
+		for (int l=threadIdx.x;l<n;l+=blockDim.x){
+			T x1=xyz1[i*n*3+l*3+0];
+			T y1=xyz1[i*n*3+l*3+1];
+			T z1=xyz1[i*n*3+l*3+2];
+			T dx=0,dy=0,dz=0;
+			for (int k=0;k<m;k++){
+				T x2=xyz2[i*m*3+k*3+0];
+				T y2=xyz2[i*m*3+k*3+1];
+				T z2=xyz2[i*m*3+k*3+2];
+				T d=match[i*n*m+k*n+l]*rsqrtf(fmaxf((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)+(z1-z2)*(z1-z2),1e-20f));
+				dx+=(x1-x2)*d;
+				dy+=(y1-y2)*d;
+				dz+=(z1-z2)*d;
+			}
+			grad1[i*n*3+l*3+0]=dx;
+			grad1[i*n*3+l*3+1]=dy;
+			grad1[i*n*3+l*3+2]=dz;
+		}
+	}
+}
+
+void matchcostgradLauncher(const int b, const int n, const int m, const at::Tensor xyz1, const at::Tensor xyz2, const at::Tensor match, at::Tensor grad1, at::Tensor grad2){
+	AT_DISPATCH_FLOATING_TYPES(xyz1.type(), "matchcostgrad1", ([&] {
+		matchcostgrad1<<<32,512>>>(
+			b, n, m, 
+			xyz1.data<scalar_t>(),
+			xyz2.data<scalar_t>(),
+			match.data<scalar_t>(),
+			grad1.data<scalar_t>());
+	}));
+	CUDA_CHECK(cudaGetLastError())
+
+	AT_DISPATCH_FLOATING_TYPES(xyz1.type(), "matchcostgrad2", ([&] {
+		matchcostgrad2<<<dim3(32,32),256>>>(
+			b, n, m,
+			xyz1.data<scalar_t>(),
+			xyz2.data<scalar_t>(),
+			match.data<scalar_t>(),
+			grad2.data<scalar_t>());
 	}));
 	CUDA_CHECK(cudaGetLastError())
 }
